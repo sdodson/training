@@ -1,0 +1,122 @@
+{
+  "apiVersion": "v1beta1",
+  "items": [
+    {
+      "apiVersion": "v1beta1",
+      "containerPort": 3306,
+      "id": "database",
+      "kind": "Service",
+      "port": 5434,
+      "selector": {
+        "name": "database"
+      }
+    },
+    {
+      "apiVersion": "v1beta1",
+      "kind": "DeploymentConfig",
+      "metadata": {
+        "name": "database"
+      },
+      "template": {
+        "controllerTemplate": {
+          "podTemplate": {
+            "desiredState": {
+              "manifest": {
+		"volumes": [
+		  {
+		    "name": "var-lib-mysql-data",
+		      "source": {
+			"hostDir": null,
+			"emptyDir": {},
+			"persistentDisk": null,
+			"gitRepo": null
+		      }
+		   }
+		],
+                "containers": [
+                  {
+                    "env": [
+                      {
+                        "name": "MYSQL_ROOT_PASSWORD",
+                        "value": "${MYSQL_ROOT_PASSWORD}"
+                      },
+                      {
+                        "name": "MYSQL_DATABASE",
+                        "value": "${MYSQL_DATABASE}"
+                      }
+                    ],
+                    "image": "openshift/mysql-55-centos7",
+                    "name": "ruby-helloworld-database",
+                    "ports": [
+                      {
+                        "containerPort": 3306
+                      }
+                    ],
+ 		    "volumeMounts": [
+		      {
+			"name": "var-lib-mysql-data",
+			"mountPath": "/var/lib/mysql/data",
+			"path": "/var/lib/mysql/data"
+		      }
+		    ]
+                  }
+                ],
+                "version": "v1beta1"
+              }
+            },
+            "labels": {
+              "name": "database"
+            }
+          },
+          "replicaSelector": {
+            "name": "database"
+          },
+          "replicas": 1
+        },
+        "strategy": {
+          "type": "Recreate"
+        }
+      },
+      "triggers": [
+        {
+          "type": "ConfigChange"
+        }
+      ]
+    }
+  ],
+  "kind": "Template",
+  "metadata": {
+    "annotations": {
+      "description": "This example shows how to hand-wire a database in OpenShift 3"
+    },
+    "name": "mysql-wiring-example"
+  },
+  "parameters": [
+    {
+      "description": "administrator username",
+      "from": "admin[A-Z0-9]{3}",
+      "generate": "expression",
+      "name": "ADMIN_USERNAME"
+    },
+    {
+      "description": "administrator password",
+      "from": "[a-zA-Z0-9]{8}",
+      "generate": "expression",
+      "name": "ADMIN_PASSWORD"
+    },
+    {
+      "description": "database password",
+      "from": "[a-zA-Z0-9]{8}",
+      "generate": "expression",
+      "name": "MYSQL_ROOT_PASSWORD"
+    },
+    {
+      "description": "database name",
+      "name": "MYSQL_DATABASE",
+      "value": "root"
+    }
+  ],
+  "labels": {
+    "template": "application-template-stibuild"
+  }
+}

@@ -56,6 +56,7 @@
 
 * [Extra STI code examples](#appendix---extra-sti-code-examples)
 * [DNSMasq setup](#appendix---dnsmasq-setup)
+* [LDAP Authentication](#appendix---ldap-authentication)
 * [Import/Export of Docker Images (Disconnected Use)](#appendix---importexport-of-docker-images-disconnected-use)
 * [Cleaning Up](#appendix---cleaning-up)
 * [Pretty Output](#appendix---pretty-output)
@@ -164,7 +165,7 @@ environment happen **faster**, you'll need to first install Docker:
 
     yum -y install docker
 
-Make sure that you are running at least `docker-1.5.0-27.el7.x86_64`.
+Make sure that you are running at least `docker-1.6.0-1.el7.x86_64`.
 
 You'll need to add `--insecure-registry 0.0.0.0/0` to your
 `/etc/sysconfig/docker` `OPTIONS`. Then:
@@ -173,12 +174,12 @@ You'll need to add `--insecure-registry 0.0.0.0/0` to your
 
 On all of your systems, grab the following docker images:
 
-    docker pull registry.access.redhat.com/openshift3_beta/ose-haproxy-router:v0.4.2.5
-    docker pull registry.access.redhat.com/openshift3_beta/ose-deployer:v0.4.2.5
-    docker pull registry.access.redhat.com/openshift3_beta/ose-sti-builder:v0.4.2.5
-    docker pull registry.access.redhat.com/openshift3_beta/ose-docker-builder:v0.4.2.5
-    docker pull registry.access.redhat.com/openshift3_beta/ose-pod:v0.4.2.5
-    docker pull registry.access.redhat.com/openshift3_beta/ose-docker-registry:v0.4.2.5
+    docker pull registry.access.redhat.com/openshift3_beta/ose-haproxy-router:v0.4.3.2
+    docker pull registry.access.redhat.com/openshift3_beta/ose-deployer:v0.4.3.2
+    docker pull registry.access.redhat.com/openshift3_beta/ose-sti-builder:v0.4.3.2
+    docker pull registry.access.redhat.com/openshift3_beta/ose-docker-builder:v0.4.3.2
+    docker pull registry.access.redhat.com/openshift3_beta/ose-pod:v0.4.3.2
+    docker pull registry.access.redhat.com/openshift3_beta/ose-docker-registry:v0.4.3.2
 
 It may be advisable to pull the following Docker images as well, since they are
 used during the various labs:
@@ -356,18 +357,6 @@ few moments (it may take up to a few minutes):
 Note: You may or may not see the deploy pod, depending on when you run this
 command.
 
-**Bug Fix:** There is a problem with the router right now. We have to remove the
-"liveness probe" from the replication controller. We'll get into more about what
-that means later, but, for now, do this:
-
-    osc get -o json rc router-1 | sed -e 's/"timeoutSeconds": 1/"timeoutSeconds": 10/' \
-    -e '/"timeoutSeconds":/i \"initialDelaySeconds": 10,' | osc update -f -
-    osc get pod | grep router-1 | awk '{print $1}' | xargs osc delete pod
-
-If you're interested: This will update the settings for the router pod (as far
-as the replication controller is concerned) and then will delete the existing
-pod so that the RC recreates it.
-
 ## Preparing for STI and Other Things
 One of the really interesting things about OpenShift v3 is that it will build
 Docker images from your source code and deploy and manage their lifecycle. In
@@ -409,12 +398,16 @@ endpoints with:
 
 And you will eventually see something like:
 
+    W0414 10:28:57.561516    5829 request.go:288] field selector: v1beta1 - events - involvedObject.namespace - default: need to check if this is versioned correctly.
+    W0414 10:28:57.561581    5829 request.go:288] field selector: v1beta1 - events - involvedObject.kind - Service: need to check if this is versioned correctly.
+    W0414 10:28:57.561587    5829 request.go:288] field selector: v1beta1 - events - involvedObject.uid - 1f41e96d-e2b2-11e4-bf25-525400b33d1d: need to check if this is versioned correctly.
+    W0414 10:28:57.561591    5829 request.go:288] field selector: v1beta1 - events - involvedObject.id - docker-registry: need to check if this is versioned correctly.
     Name:                   docker-registry
     Labels:                 docker-registry=default
     Selector:               docker-registry=default
-    IP:                     172.30.17.154
-    Port:                   5000
-    Endpoints:              10.1.0.7:5000
+    IP:                     172.30.17.64
+    Port:                   <unnamed>       5000/TCP
+    Endpoints:              10.1.0.5:5000
     Session Affinity:       None
     No events.
 
@@ -648,7 +641,7 @@ which we're not accessing.
 
 **Note:** See the [troubleshooting guide](#appendix---troubleshooting) for
 details on how to fetch a new token once this once expires.  The installer sets
-the default token lifetime to 48 hours.
+the default token lifetime to 4 hours.
 
 ### Grab the Training Repo Again
 Since Joe and Alice can't access the training folder in root's home directory,
@@ -1258,11 +1251,15 @@ also work (albeit with a self-signed certificate):
 ### Deleting a Project
 Since we are done with this "demo" project, and since the `joe` user is a
 project administrator, let's go ahead and delete the project. This should also
-end up deleting all the pods.
+end up deleting all the pods, and other resources, too.
 
 As the `joe` user:
 
     osc delete project demo
+
+If you quickly go to the web console and return to the top page, you'll see a
+warning icon that will pop-up a hover tip saying the project is marked for
+deletion.
 
 If you switch to the `root` user and issue `osc get project` you will see that
 the demo project's status is "Terminating". If you do an `osc get pod -n demo`
@@ -1284,8 +1281,8 @@ for you).
 As the `root` user, we will create a new project to put our first STI example
 into. Grab the project definition and create it:
 
-    openshift ex new-project sinatra --display-name="Ruby/Sinatra" \
-    --description="Our Simple Sintra STI Example" \
+    openshift admin new-project sinatra --display-name="OpenShift 3 Demo" \
+    --description="This is the first demo project with OpenShift v3" \
     --admin=joe
 
 At this point, if you click the OpenShift image on the web console you should be
@@ -1327,6 +1324,9 @@ a Docker image.
 
 1. OpenShift will then deploy the built Docker image as a Pod with an associated
 Service.
+
+**Note:** I am wondering if we want to do this via the console now, except for a
+bug with services not being created.
 
 ### Create the Build Process
 Let's go ahead and get everything fired up:
@@ -1474,13 +1474,13 @@ comes in a template that you can just fire up and start using or hacking on.
 ### A Project for the Quickstart
 As the `root` user, first we'll create a new project:
 
-    openshift ex new-project integrated --display-name="Frontend/Backend" \
+    openshift admin new-project quickstart --display-name="Quickstart" \
     --description='A demonstration of a "quickstart/template"' \
     --admin=joe
 
 As the `joe` user, we'll set our context to use the corresponding namespace:
 
-    osc project integrated
+    osc project quickstart
 
 ### A Quick Aside on Templates
 From the [OpenShift
@@ -1516,7 +1516,7 @@ What did you just do? The `integrated-template.json` file defined a template. By
 all users of the OpenShift environment. Let's take a look at how that works.
 
 ### Create an Instance of the Template
-In the web console, logged in as `joe`, find the "Frontend/Backend" project, and
+In the web console, logged in as `joe`, find the "Quickstart" project, and
 then hit the "Create +" button. 
 
 Click the "Browse all templates..." button.
@@ -1574,7 +1574,7 @@ separate "applications" that we want to wire together.
 As the `root` user, create another new project for this "wiring" example. This
 time we'll make it belong to `alice`:
 
-    openshift ex new-project wiring --display-name="Exploring Parameters" \
+    openshift admin new-project wiring --display-name="Exploring Parameters" \
     --description='An exploration of wiring using parameters' \
     --admin=alice
 
@@ -1584,7 +1584,7 @@ Open a terminal as `alice`:
 
 Then:
 
-    osc login -n demo \
+    osc login -n wiring \
     --certificate-authority=/var/lib/openshift/openshift.local.certificates/ca/cert.crt \
     --server=https://ose3-master.example.com:8443
 
@@ -1618,7 +1618,18 @@ Go ahead and create the configuration:
    
     osc create -f frontend-config.json
 
+As soon as you create this, all of the resources will be created *and* a build
+will be started for you. Let's go ahead and wait until this build completes
+before continuing. It may take about 20-40 seconds for the automatic build to
+start:
+
+    https://github.com/openshift/origin/issues/1738
+
 ### Webhooks
+
+**Note**: Since the build auto starts, we may want to move this to a later
+example.
+
 Webhooks are a way to integrate external systems into your OpenShift
 environment. They can be used to fire off builds. Generally speaking, one would
 make code changes, update the code repository, and then some process would hit
@@ -1642,7 +1653,7 @@ First, look at the list of builds:
 
     osc get build
 
-You should see that there aren't any. Then, `curl`:
+You should see that the first build had completed. Then, `curl`:
 
     curl -i -H "Accept: application/json" \
     -H "X-HTTP-Method-Override: PUT" -X POST -k \
@@ -1651,16 +1662,17 @@ You should see that there aren't any. Then, `curl`:
 And now `get build` again:
 
     osc get build
-    NAME                                                   TYPE STATUS  POD
-    ruby-sample-build-9ae35312-c687-11e4-a4a6-525400b33d1d STI  Running build-ruby-sample-build-9ae35312-c687-11e4-a4a6-525400b33d1d
+    NAME                  TYPE      STATUS     POD
+    ruby-sample-build-1   STI       Complete   ruby-sample-build-1
+    ruby-sample-build-2   STI       Pending    ruby-sample-build-2
 
 You can see that this could have been part of some CI/CD workflow that
 automatically called our webhook once the code was tested.
 
 ### Visit Your Application
-Once the build is finished and the frontend service's endpoint has been updated,
-visit your application. The frontend configuration contained a route for
-`wiring.cloudapps.example.com`. You should see a note that the database is
+Once the new build is finished and the frontend service's endpoint has been
+updated, visit your application. The frontend configuration contained a route
+for `wiring.cloudapps.example.com`. You should see a note that the database is
 missing. So, let's create it!
 
 ### Create the Database Config
@@ -1732,13 +1744,13 @@ gets fired up this time, it will then have the `DATABASE_SERVICE_HOST` value,
 which means it will be able to connect to the DB, which means that we should no
 longer see these errors!
 
-Go ahead and find your frontend pod, and then kill it:
+As `alice`, go ahead and find your frontend pod, and then kill it:
 
     osc delete pod `osc get pod | grep front | awk '{print $1}'`
 
 You'll see something like:
 
-    frontend-1-hvxiy
+    pods/frontend-1-b6bgy
 
 That was the generated name of the pod when the replication controller stood it
 up the first time. After a few moments, we can look at the list of pods again:
@@ -1752,7 +1764,7 @@ And we should see a different name for the pod this time:
 This shows that, underneath the covers, the RC restarted our pod. Since it was
 restarted, it should have a value for the `DATABASE_SERVICE_HOST` environment
 variable. Go to the node where the pod is running, and find the Docker container
-id:
+id as `root`:
 
     docker inspect `docker ps | grep wiring | grep front | grep run | awk \
     '{print $1}'` | grep DATABASE
@@ -2122,6 +2134,112 @@ wildcard space:
     foo.cloudapps.example.com 0 IN A 192.168.133.2
     ...
 
+# APPENDIX - LDAP Authentication
+OpenShift currently supports several authentication methods for obtaining API
+tokens.  While OpenID or one of the supported Oauth providers are preferred,
+support for services such as LDAP is possible today using either the [Basic Auth
+Remote](http://docs.openshift.org/latest/architecture/authentication.html#BasicAuthPasswordIdentityProvider)
+identity provider or the [Request
+Header](http://docs.openshift.org/latest/architecture/authentication.html#RequestHeaderIdentityProvider)
+Identity provider.  This example while demonstrate the ease of running a
+`BasicAuthPasswordIdentityProvider` on OpenShift.
+
+For full documentation on the other authentication options please refer to the
+[Official
+Documentation](http://docs.openshift.org/latest/architecture/authentication.html#authentication-integrations)
+
+### Prerequirements:
+
+* A working Router with a wildcard DNS entry pointed to it
+* A working Registry
+
+### Setting up an example LDAP server:
+
+For purposes of this training it is possible to use a preexisting LDAP server
+or the example ldap server that comes preconfigured with the users referenced
+in this document.  The decision does not need to be made up front.  It is
+possible to change the ldap server that is used at any time.
+
+For convenience the example LDAP server can be deployed on OpenShift as
+follows:
+
+    osc create -f openldap-example.json
+
+That will create a pod from an OpenLDAP image hosted externally on the Docker
+Hub.  You can find the source for it [here](beta3/images/openldap-example/).
+
+To test the example LDAP service you can run the following:
+
+    yum install openldap-clients
+    ldapsearch -D 'cn=Manager,dc=example,dc=com' -b "dc=example,dc=com" -s sub "(objectclass=*)" -h 172.30.17.40 -w redhat
+
+You should see ldif output that shows the example.com users.
+
+### Creating the Basic Auth service
+
+While the example OpenLDAP service is itself mostly a toy, the Basic Auth
+service created below can easily be made highly available using OpenShift
+features.  It's a normal web service that happens to speak the [API required by
+the
+master](http://docs.openshift.org/latest/architecture/authentication.html#BasicAuthPasswordIdentityProvider)
+and talk to an LDAP server.  Since it's stateless simply increasing the
+replicas in the replication controller is all that is needed to make the
+application highly available.
+
+To make this as easy as possible for the beta training a helper script has been
+provided to create a Route, Service, Build Config and Deployment Config.  The
+Basic Auth service will be configured to use TLS all the way to the pod by
+means of the [Router's SNI
+capabilities](http://docs.openshift.org/latest/architecture/routing.html#passthrough-termination).
+Since TLS is used this helper script will also generated the required
+certificates using OpenShift default CA.
+
+    ./basicauthurl.sh -h
+
+No arguments are required but the help output will show you the defaults:
+
+    --route    basicauthurl.example.com
+    --git-repo git://github.com/brenton/basicauthurl-example.git
+
+Once you run the helper script it will output the configuration changes
+required for `/etc/openshift/master.yaml` as well as create
+`basicauthurl.json`.  You can now feed that to `osc`:
+
+    osc create -f basicauthurl.json
+
+At this point everything is in place to start the build which will trigger the
+deployment.
+
+    osc start-build basicauthurl-build
+
+When the build finished you can run the following command to test that the
+Service is responding correctly:
+
+    curl -u joe:redhat --cacert /var/lib/openshift/openshift.local.certificates/ca/cert.crt --resolve basicauthurl.example.com:443:172.30.17.56 https://basicauthurl.example.com/validate
+
+In that case in order for SNI to work correctly we had to trick curl with the `--resolve` flag.  If wildcard DNS is set up in your environment to point to the router then the following should test the service end to end:
+
+   curl -u joe:redhat --cacert /var/lib/openshift/openshift.local.certificates/ca/cert.crt https://basicauthurl.example.com/validate
+
+If you've made the required changes to `/etc/openshift/mmaster.yaml` and
+restarted `openshift-master` then you should now be able to log it with the
+example users `joe` and `alice` with the password `redhat`.
+
+### Using an LDAP server external to OpenShift
+
+For more advanced usage it's best to refer to the
+[README](https://github.com/openshift/sti-basicauthurl) for now.  All
+mod_authnz_ldap directives are available.
+
+### Upcoming changes
+
+We've recently worked with Kubernetes upstream to add API support for Secrets.
+Before GA the need for STI builds in this authentication approach may go away.
+What this would mean is that admins would run a script to import an Apache
+configuration in to a Secret and the Pod could use this on start up.  In this
+case the Build Config would go away and only a Deployment Config would be
+needed.
+
 # APPENDIX - Import/Export of Docker Images (Disconnected Use)
 Docker supports import/save of Images via tarball. You can do something like the
 following on your connected machine:
@@ -2165,7 +2283,7 @@ now. The following command will show you just about everything you might need to
 delete. Be sure to change your context across all the namespaces and the
 master-admin to find everything:
 
-    for resource in build buildconfig images imagerepository deploymentconfig \
+    for resource in build buildconfig images imagestream deploymentconfig \
     route replicationcontroller service pod; do echo -e "Resource: $resource"; \
     osc get $resource; echo -e "\n\n"; done
 
