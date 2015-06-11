@@ -1,0 +1,430 @@
+{
+  "kind": "Template",
+  "apiVersion": "v1beta3",
+  "metadata": {
+    "name": "eap6-basic-sti",
+    "creationTimestamp": null,
+    "annotations": {
+      "description": "Application template for EAP 6 applications built using STI.",
+      "iconClass": "icon-jboss"
+    }
+  },
+  "objects": [
+    {
+      "kind": "Service",
+      "apiVersion": "v1beta3",
+      "metadata": {
+        "name": "${APPLICATION_NAME}-http-service",
+        "creationTimestamp": null,
+        "labels": {
+          "application": "${APPLICATION_NAME}"
+        },
+        "annotations": {
+          "description": "The web server's http port."
+        }
+      },
+      "spec": {
+        "ports": [
+          {
+            "protocol": "TCP",
+            "port": 8080,
+            "targetPort": 8080,
+            "nodePort": 0
+          }
+        ],
+        "selector": {
+          "deploymentConfig": "${APPLICATION_NAME}"
+        },
+        "portalIP": "",
+        "type": "ClusterIP",
+        "sessionAffinity": "None"
+      },
+      "status": {
+        "loadBalancer": {}
+      }
+    },
+    {
+      "kind": "Service",
+      "apiVersion": "v1beta3",
+      "metadata": {
+        "name": "${APPLICATION_NAME}-https-service",
+        "creationTimestamp": null,
+        "labels": {
+          "application": "${APPLICATION_NAME}"
+        },
+        "annotations": {
+          "description": "The web server's https port."
+        }
+      },
+      "spec": {
+        "ports": [
+          {
+            "protocol": "TCP",
+            "port": 8443,
+            "targetPort": 8443,
+            "nodePort": 0
+          }
+        ],
+        "selector": {
+          "deploymentConfig": "${APPLICATION_NAME}"
+        },
+        "portalIP": "",
+        "type": "ClusterIP",
+        "sessionAffinity": "None"
+      },
+      "status": {
+        "loadBalancer": {}
+      }
+    },
+    {
+      "kind": "Service",
+      "apiVersion": "v1beta3",
+      "metadata": {
+        "name": "${APPLICATION_NAME}-ping",
+        "creationTimestamp": null,
+        "labels": {
+          "application": "${APPLICATION_NAME}"
+        },
+        "annotations": {
+          "description": "Ping service for clustered applications."
+        }
+      },
+      "spec": {
+        "ports": [
+          {
+            "protocol": "TCP",
+            "port": 8888,
+            "targetPort": 8888,
+            "nodePort": 0
+          }
+        ],
+        "selector": {
+          "deploymentConfig": "${APPLICATION_NAME}"
+        },
+        "portalIP": "None",
+        "type": "ClusterIP",
+        "sessionAffinity": "None"
+      },
+      "status": {
+        "loadBalancer": {}
+      }
+    },
+    {
+      "kind": "Route",
+      "apiVersion": "v1beta3",
+      "metadata": {
+        "name": "${APPLICATION_NAME}-http-route",
+        "creationTimestamp": null,
+        "labels": {
+          "application": "${APPLICATION_NAME}"
+        },
+        "annotations": {
+          "description": "Route for application's http service."
+        }
+      },
+      "spec": {
+        "host": "${APPLICATION_HOSTNAME}",
+        "to": {
+          "kind": "Service",
+          "name": "${APPLICATION_NAME}-http-service"
+        }
+      },
+      "status": {}
+    },
+    {
+      "kind": "Route",
+      "apiVersion": "v1beta3",
+      "metadata": {
+        "name": "${APPLICATION_NAME}-https-route",
+        "creationTimestamp": null,
+        "labels": {
+          "application": "${APPLICATION_NAME}"
+        },
+        "annotations": {
+          "description": "Route for application's https service."
+        }
+      },
+      "spec": {
+        "host": "${APPLICATION_HOSTNAME}",
+        "to": {
+          "kind": "Service",
+          "name": "${APPLICATION_NAME}-https-service"
+        },
+        "tls": {
+          "termination": "passthrough"
+        }
+      },
+      "status": {}
+    },
+    {
+      "kind": "ImageStream",
+      "apiVersion": "v1beta3",
+      "metadata": {
+        "name": "${APPLICATION_NAME}",
+        "creationTimestamp": null,
+        "labels": {
+          "application": "${APPLICATION_NAME}"
+        }
+      },
+      "spec": {},
+      "status": {
+        "dockerImageRepository": ""
+      }
+    },
+    {
+      "kind": "BuildConfig",
+      "apiVersion": "v1beta3",
+      "metadata": {
+        "name": "${APPLICATION_NAME}",
+        "creationTimestamp": null,
+        "labels": {
+          "application": "${APPLICATION_NAME}"
+        }
+      },
+      "spec": {
+        "triggers": [
+          {
+            "type": "github",
+            "github": {
+              "secret": "${GITHUB_TRIGGER_SECRET}"
+            }
+          },
+          {
+            "type": "generic",
+            "generic": {
+              "secret": "${GENERIC_TRIGGER_SECRET}"
+            }
+          },
+          {
+            "type": "imageChange",
+            "imageChange": {}
+          }
+        ],
+        "source": {
+          "type": "Git",
+          "git": {
+            "uri": "${GIT_URI}",
+            "ref": "${GIT_REF}"
+          },
+          "contextDir": "${GIT_CONTEXT_DIR}"
+        },
+        "strategy": {
+          "type": "Source",
+          "sourceStrategy": {
+            "from": {
+              "kind": "ImageStreamTag",
+              "name": "jboss-eap6-openshift:${EAP_RELEASE}"
+            }
+          }
+        },
+        "output": {
+          "to": {
+            "kind": "ImageStreamTag",
+            "name": "${APPLICATION_NAME}:latest"
+          }
+        },
+        "resources": {}
+      },
+      "status": {
+        "lastVersion": 0
+      }
+    },
+    {
+      "kind": "DeploymentConfig",
+      "apiVersion": "v1beta3",
+      "metadata": {
+        "name": "${APPLICATION_NAME}",
+        "creationTimestamp": null,
+        "labels": {
+          "application": "${APPLICATION_NAME}"
+        }
+      },
+      "spec": {
+        "strategy": {
+          "type": "Recreate",
+          "resources": {}
+        },
+        "triggers": [
+          {
+            "type": "ImageChange",
+            "imageChangeParams": {
+              "automatic": true,
+              "containerNames": [
+                "${APPLICATION_NAME}"
+              ],
+              "from": {
+                "name": "${APPLICATION_NAME}"
+              },
+              "lastTriggeredImage": ""
+            }
+          }
+        ],
+        "replicas": 1,
+        "selector": {
+          "deploymentConfig": "${APPLICATION_NAME}"
+        },
+        "template": {
+          "metadata": {
+            "creationTimestamp": null,
+            "labels": {
+              "application": "${APPLICATION_NAME}",
+              "deploymentConfig": "${APPLICATION_NAME}"
+            }
+          },
+          "spec": {
+            "volumes": [
+              {
+                "name": "eap-keystore-volume",
+                "secret": {
+                  "secretName": "${EAP_HTTPS_SECRET}"
+                },
+                "rbd": null
+              }
+            ],
+            "containers": [
+              {
+                "name": "${APPLICATION_NAME}",
+                "image": "${APPLICATION_NAME}",
+                "ports": [
+                  {
+                    "name": "${APPLICATION_NAME}-tcp-8080",
+                    "containerPort": 8080,
+                    "protocol": "TCP"
+                  },
+                  {
+                    "name": "${APPLICATION_NAME}-tcp-8443",
+                    "containerPort": 8443,
+                    "protocol": "TCP"
+                  },
+                  {
+                    "name": "${APPLICATION_NAME}-ping-8888",
+                    "containerPort": 8888,
+                    "protocol": "TCP"
+                  }
+                ],
+                "env": [
+                  {
+                    "name": "OPENSHIFT_DNS_PING_SERVICE_NAME",
+                    "value": "${APPLICATION_NAME}-ping"
+                  },
+                  {
+                    "name": "OPENSHIFT_DNS_PING_SERVICE_PORT",
+                    "value": "8888"
+                  },
+                  {
+                    "name": "EAP_HTTPS_KEYSTORE_DIR",
+                    "value": "/etc/eap-secret-volume"
+                  },
+                  {
+                    "name": "EAP_HTTPS_KEYSTORE",
+                    "value": "${EAP_HTTPS_KEYSTORE}"
+                  },
+                  {
+                    "name": "EAP_HTTPS_NAME",
+                    "value": "${EAP_HTTPS_NAME}"
+                  },
+                  {
+                    "name": "EAP_HTTPS_PASSWORD",
+                    "value": "${EAP_HTTPS_PASSWORD}"
+                  }
+                ],
+                "resources": {},
+                "volumeMounts": [
+                  {
+                    "name": "eap-keystore-volume",
+                    "readOnly": true,
+                    "mountPath": "/etc/eap-secret-volume"
+                  }
+                ],
+                "readinessProbe": {
+                  "exec": {
+                    "command": [
+                      "/bin/bash",
+                      "-c",
+                      "/opt/eap/bin/jboss-cli.sh --connect ':read-attribute(name=server-state)' | grep -iq running"
+                    ]
+                  },
+                  "timeoutSeconds": 1
+                },
+                "terminationMessagePath": "/dev/termination-log",
+                "imagePullPolicy": "Always",
+                "capabilities": {},
+                "securityContext": {
+                  "capabilities": {},
+                  "privileged": false
+                }
+              }
+            ],
+            "restartPolicy": "Always",
+            "dnsPolicy": "ClusterFirst",
+            "serviceAccount": ""
+          }
+        }
+      },
+      "status": {}
+    }
+  ],
+  "parameters": [
+    {
+      "name": "EAP_RELEASE",
+      "description": "EAP Release version, e.g. 6.4, etc.",
+      "value": "6.4"
+    },
+    {
+      "name": "APPLICATION_NAME",
+      "description": "The name for the application.",
+      "value": "eap-app"
+    },
+    {
+      "name": "APPLICATION_HOSTNAME",
+      "description": "Hostname for service routes",
+      "value": "eap-app.local"
+    },
+    {
+      "name": "GIT_URI",
+      "description": "Git source URI for application"
+    },
+    {
+      "name": "GIT_REF",
+      "description": "Git branch/tag reference",
+      "value": "master"
+    },
+    {
+      "name": "GIT_CONTEXT_DIR",
+      "description": "Path within Git project to build; empty for root project directory."
+    },
+    {
+      "name": "GITHUB_TRIGGER_SECRET",
+      "description": "Github trigger secret",
+      "generate": "expression",
+      "from": "[a-zA-Z0-9]{8}"
+    },
+    {
+      "name": "GENERIC_TRIGGER_SECRET",
+      "description": "Generic build trigger secret",
+      "generate": "expression",
+      "from": "[a-zA-Z0-9]{8}"
+    },
+    {
+      "name": "EAP_HTTPS_SECRET",
+      "description": "The name of the secret containing the keystore file",
+      "value": "eap-app-secret"
+    },
+    {
+      "name": "EAP_HTTPS_KEYSTORE",
+      "description": "The name of the keystore file within the secret",
+      "value": "keystore.jks"
+    },
+    {
+      "name": "EAP_HTTPS_NAME",
+      "description": "The name associated with the server certificate"
+    },
+    {
+      "name": "EAP_HTTPS_PASSWORD",
+      "description": "The password for the keystore and certificate"
+    }
+  ],
+  "labels": {
+    "template": "eap6-basic-sti"
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "kind": "Config",
+  "apiVersion": "v1beta3",
+  "metadata": {},
+  "items": [
+    {
+      "kind": "Route",
+      "apiVersion": "v1beta3",
+      "metadata": {
+        "name": "wordpress-route"
+      },
+      "spec": {
+        "host": "wordpress.cloudapps.example.com",
+        "to": {
+          "name": "wordpress-httpd-service"
+        }
+      }
+    },
+    {
+      "kind": "Service",
+      "apiVersion": "v1beta3",
+      "metadata": {
+        "name": "wordpress-httpd-service"
+      },
+      "spec": {
+        "selector": {
+          "name": "wordpress"
+        },
+        "ports": [
+          {
+            "protocol": "TCP",
+            "port": 80,
+            "targetPort": 80
+          }
+        ]
+      }
+    }
+  ]
+}
